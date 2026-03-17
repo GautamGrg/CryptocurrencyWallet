@@ -12,7 +12,7 @@ public class MnemonicService {
 
     public static String generateMnemonic() {
         try {
-            byte[] entropy = new byte[16];
+            byte[] entropy = new byte[32];
             random.nextBytes(entropy);
 
             List<String> words = MnemonicCode.INSTANCE.toMnemonic(entropy);

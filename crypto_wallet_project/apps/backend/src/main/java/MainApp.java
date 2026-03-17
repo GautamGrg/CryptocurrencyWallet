@@ -1,6 +1,5 @@
 import java.sql.*;
-import java.util.Base64;
-import java.util.Scanner;
+import java.util.*;
 import java.security.SecureRandom;
 import java.security.MessageDigest;
 import javax.crypto.spec.PBEKeySpec;
@@ -14,16 +13,15 @@ import wallet.BitcoinWallet;
 import wallet.MnemonicService;
 
 public class MainApp {
-    private static void register(String email, String password, String seed) {
+    private static void register(String email, String password) {
         String hashed = hashPassword(password);
         String seedPhrase = MnemonicService.generateMnemonic();
         try (Connection conn = DatabaseManager.connect();
                 PreparedStatement pstmt = conn.prepareStatement(
-                        "INSERT INTO wallets(email, password_hash, seed_phrase) VALUES (?, ?, ?)",
+                        "INSERT INTO users(email, password_hash) VALUES (?, ?)",
                         Statement.RETURN_GENERATED_KEYS)) {
             pstmt.setString(1, email);
             pstmt.setString(2, hashed);
-            pstmt.setString(3, seedPhrase);
             pstmt.executeUpdate();
 
             ResultSet rs = pstmt.getGeneratedKeys();
@@ -42,7 +40,7 @@ public class MainApp {
 
     private static void loginCred(String email, String password) {
         try (Connection conn = DatabaseManager.connect();
-                PreparedStatement pstmt = conn.prepareStatement("SELECT password_hash FROM wallets WHERE email = ?")) {
+                PreparedStatement pstmt = conn.prepareStatement("SELECT password_hash FROM users WHERE email = ?")) {
             pstmt.setString(1, email);
             ResultSet rs = pstmt.executeQuery();
             for (int i = 0; i < 3; i++) {
@@ -132,12 +130,10 @@ public class MainApp {
             String email = scanner.nextLine();
             System.out.print("Password: ");
             String password = scanner.nextLine();
-            System.out.print("Seed Phrase: ");
-            String seed = scanner.nextLine();
-            register(email, password, seed);
+            register(email, password);
         } else {
             System.out.println("""
-                    ======================================
+                    \n======================================
                                 User Login
                     ======================================
                     """);
@@ -154,7 +150,6 @@ public class MainApp {
                 String seedPhrase = scanner.nextLine();
                 loginSeed(seedPhrase);
             }
-
         }
         scanner.close();
     }

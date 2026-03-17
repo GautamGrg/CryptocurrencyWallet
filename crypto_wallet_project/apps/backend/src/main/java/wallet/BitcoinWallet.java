@@ -1,44 +1,50 @@
 package wallet;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
-import java.util.*;
-import org.bitcoinj.core.ECKey;
+import java.util.List;
+
 import org.bitcoinj.core.LegacyAddress;
 import org.bitcoinj.params.MainNetParams;
+import org.bitcoinj.wallet.DeterministicSeed;
+import org.bitcoinj.crypto.DeterministicKey;
+import org.bitcoinj.crypto.HDKeyDerivation;
+import org.bitcoinj.crypto.ChildNumber;
 
 public class BitcoinWallet implements Wallet {
 
+    private final String seedPhrase;
     private final String address;
     private double balance = 0.0;
 
     public BitcoinWallet() {
-        ECKey key = new ECKey();
-        this.address = LegacyAddress.fromKey(MainNetParams.get(), key).toString();
+        this.seedPhrase = MnemonicService.generateMnemonic();
+        List<String> words = List.of(seedPhrase.split(" "));
+        DeterministicSeed seed = new DeterministicSeed(words, null, "", 0);
+        byte[] seedBytes = seed.getSeedBytes();
+        DeterministicKey masterKey = HDKeyDerivation.createMasterPrivateKey(seedBytes);
+        DeterministicKey childKey = HDKeyDerivation.deriveChildKey(masterKey, new ChildNumber(0));
+        this.address = LegacyAddress.fromKey(MainNetParams.get(), childKey).toString();
     }
 
-    @Override
     public String getAddress() {
         return address;
     }
 
-    @Override
     public String getCurrency() {
         return "BTC";
     }
 
-    @Override
+    public String getSeedPhrase() {
+        return seedPhrase;
+    }
+
     public double getBalance() {
         return balance;
     }
 
-    @Override
     public void credit(double amount) {
         balance += amount;
     }
 
-    @Override
     public boolean debit(double amount) {
         if (balance >= amount) {
             balance -= amount;

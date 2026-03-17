@@ -1,0 +1,9 @@
+# Compiled Source #
+###################
+*.class
+*.exe
+
+
+# Database #
+############
+*.db

@@ -20,20 +20,20 @@ public class DatabaseManager {
     public static void init() {
         try (Connection con = connect(); Statement stm = con.createStatement()) {
             stm.execute("""
-                CREATE TABLE IF NOT EXISTS users (
+                CREATE TABLE IF NOT EXISTS users(
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     email TEXT NOT NULL UNIQUE,
-                    password_hash TEXT NOT NULL,
-                    seed_phrase TEXT NOT NULL
-                )
+                    password_hash TEXT NOT NULL)
             """);
             stm.execute("""
                 CREATE TABLE IF NOT EXISTS wallets(
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL,
+                    seed_phrase TEXT NOT NULL,
                     currency TEXT NOT NULL,
                     address TEXT NOT NULL,
-                    balance REAL DEFAULT 0
-                )
+                    balance REAL DEFAULT 0,
+                    FOREIGN KEY(user_id) REFERENCES users(id))
             """);
             System.out.println("Database created successfully!");
         } catch (Exception exc) {
