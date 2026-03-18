@@ -1,3 +1,4 @@
+import java.io.*;
 import java.sql.*;
 import java.util.*;
 import java.security.SecureRandom;
@@ -13,8 +14,8 @@ import wallet.BitcoinWallet;
 import wallet.MnemonicService;
 
 public class MainApp {
-    private static void register(String email, String password) {
-        String hashed = hashPassword(password);
+    private static void register(String email, char[] password) {
+        String hashed = hashPassword(new String(password));
         String seedPhrase = MnemonicService.generateMnemonic();
         try (Connection conn = DatabaseManager.connect();
                 PreparedStatement pstmt = conn.prepareStatement(
@@ -38,22 +39,32 @@ public class MainApp {
         }
     }
 
-    private static void loginCred(String email, String password) {
+    private static void loginCred(String email) {
+        Console cnsl = System.console();
+        if (cnsl == null) {
+            System.out.println("No console available");
+            return;
+        }
         try (Connection conn = DatabaseManager.connect();
                 PreparedStatement pstmt = conn.prepareStatement("SELECT password_hash FROM users WHERE email = ?")) {
             pstmt.setString(1, email);
             ResultSet rs = pstmt.executeQuery();
-            for (int i = 0; i < 3; i++) {
-                if (rs.next()) {
+            int attempts_left = 1;
+            if (rs.next()) {
+                while (attempts_left <= 3) {
+                    char[] password = cnsl.readPassword("Password: ");
                     String storedHash = rs.getString("password_hash");
-                    if (validatePassword(password, storedHash)) {
+                    if (validatePassword(new String(password), storedHash)) {
                         System.out.println("Login successful.");
+                        break;
                     } else {
-                        System.out.println("Invalid credentials. Attempt[" + i + "/3]");
+                        System.out.println("Invalid credentials. Attempt[" + attempts_left + "/3]");
+                        attempts_left++;
                     }
-                } else {
-                    System.out.println("User not found.");
                 }
+            }
+            if (attempts_left > 3) {
+                System.out.println("Exceeded number of password attempts. Login failed");
             }
         } catch (SQLException e) {
             System.out.println("Error: " + e.getMessage());
@@ -110,6 +121,11 @@ public class MainApp {
 
     public static void main(String[] args) {
         DatabaseManager.init();
+        Console cnsl = System.console();
+        if (cnsl == null) {
+            System.out.println("No console available");
+            return;
+        }
         Scanner scanner = new Scanner(System.in);
         System.out.println("""
                 ==========================================
@@ -128,8 +144,7 @@ public class MainApp {
                     """);
             System.out.print("Email: ");
             String email = scanner.nextLine();
-            System.out.print("Password: ");
-            String password = scanner.nextLine();
+            char[] password = cnsl.readPassword("Password: ");
             register(email, password);
         } else {
             System.out.println("""
@@ -137,14 +152,13 @@ public class MainApp {
                                 User Login
                     ======================================
                     """);
-            System.out.println("1. Login using user credentials\n 2. Recover account");
+            System.out.println("1. Login using user credentials\n2. Recover account using Seed Phrase");
+            System.out.print("Enter your choice: ");
             int loginChoice = Integer.valueOf(scanner.nextLine());
             if (loginChoice == 1) {
                 System.out.print("Email: ");
                 String email = scanner.nextLine();
-                System.out.print("Password: ");
-                String password = scanner.nextLine();
-                loginCred(email, password);
+                loginCred(email);
             } else {
                 System.out.print("Seed Phrase: ");
                 String seedPhrase = scanner.nextLine();
