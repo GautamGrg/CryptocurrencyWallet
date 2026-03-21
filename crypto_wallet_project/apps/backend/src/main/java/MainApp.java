@@ -8,7 +8,6 @@ import javax.crypto.SecretKeyFactory;
 
 import db.DatabaseManager;
 import db.WalletRepository;
-
 import wallet.Wallet;
 import wallet.BitcoinWallet;
 import wallet.MnemonicService;
@@ -39,11 +38,10 @@ public class MainApp {
         }
     }
 
-    private static void loginCred(String email) {
+    private static String loginCred(String email) {
         Console cnsl = System.console();
         if (cnsl == null) {
             System.out.println("No console available");
-            return;
         }
         try (Connection conn = DatabaseManager.connect();
                 PreparedStatement pstmt = conn.prepareStatement("SELECT password_hash FROM users WHERE email = ?")) {
@@ -56,7 +54,7 @@ public class MainApp {
                     String storedHash = rs.getString("password_hash");
                     if (validatePassword(new String(password), storedHash)) {
                         System.out.println("Login successful.");
-                        break;
+                        return rs.getString("id");
                     } else {
                         System.out.println("Invalid credentials. Attempt[" + attempts_left + "/3]");
                         attempts_left++;
@@ -66,8 +64,10 @@ public class MainApp {
             if (attempts_left > 3) {
                 System.out.println("Exceeded number of password attempts. Login failed");
             }
+            return "Error";
         } catch (SQLException e) {
             System.out.println("Error: " + e.getMessage());
+            return "Error";
         }
     }
 
@@ -119,6 +119,22 @@ public class MainApp {
         }
     }
 
+    private static void userWallet(String user_account) {
+        try (Connection conn = DatabaseManager.connect();
+                PreparedStatement pstmt = conn.prepareStatement("SELECT balance FROM wallets WHERE user_id = ?")) {
+            pstmt.setString(1, user_account);
+            ResultSet rs = pstmt.executeQuery();
+            if (user_account.contains(user_account)) {
+                if (rs.next()) {
+                    String user_balance = rs.getString("balance");
+                    System.out.println("Your Bitcoin balance: " + user_balance);
+                }
+            }
+        } catch (SQLException e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
+
     public static void main(String[] args) {
         DatabaseManager.init();
         Console cnsl = System.console();
@@ -150,7 +166,7 @@ public class MainApp {
             System.out.println("""
                     \n======================================
                                 User Login
-                    ======================================
+                    ========================================
                     """);
             System.out.println("1. Login using user credentials\n2. Recover account using Seed Phrase");
             System.out.print("Enter your choice: ");
@@ -158,7 +174,7 @@ public class MainApp {
             if (loginChoice == 1) {
                 System.out.print("Email: ");
                 String email = scanner.nextLine();
-                loginCred(email);
+                userWallet(loginCred(email));
             } else {
                 System.out.print("Seed Phrase: ");
                 String seedPhrase = scanner.nextLine();
