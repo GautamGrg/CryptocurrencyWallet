@@ -38,51 +38,53 @@ public class MainApp {
         }
     }
 
-    private static String loginCred(String email) {
+    private static Integer loginCred(String email) {
         Console cnsl = System.console();
         if (cnsl == null) {
             System.out.println("No console available");
         }
         try (Connection conn = DatabaseManager.connect();
-                PreparedStatement pstmt = conn.prepareStatement("SELECT password_hash FROM users WHERE email = ?")) {
+                PreparedStatement pstmt = conn
+                        .prepareStatement("SELECT id, password_hash FROM users WHERE email = ?")) {
             pstmt.setString(1, email);
             ResultSet rs = pstmt.executeQuery();
-            int attempts_left = 1;
-            if (rs.next()) {
-                while (attempts_left <= 3) {
-                    char[] password = cnsl.readPassword("Password: ");
-                    String storedHash = rs.getString("password_hash");
-                    if (validatePassword(new String(password), storedHash)) {
-                        System.out.println("Login successful.");
-                        return rs.getString("id");
-                    } else {
-                        System.out.println("Invalid credentials. Attempt[" + attempts_left + "/3]");
-                        attempts_left++;
-                    }
+            if (!rs.next()) {
+                System.out.println("Invalid user, either you entered wrong email or the user is not registered");
+                return null;
+            }
+            char[] password = cnsl.readPassword("Password: ");
+            String storedHash = rs.getString("password_hash");
+            int userId = rs.getInt("id");
+
+            for (int attempt = 1; attempt <= 3; attempt++) {
+                if (validatePassword(new String(password), storedHash)) {
+                    System.out.println("Login successful.");
+                    return userId;
+                } else {
+                    System.out.println("Invalid credentials. Attempt[" + attempt + "/3]");
                 }
             }
-            if (attempts_left > 3) {
-                System.out.println("Exceeded number of password attempts. Login failed");
-            }
-            return "Error";
+            System.out.println("Exceeded number of password attempts. Login failed");
+            return null;
         } catch (SQLException e) {
             System.out.println("Error: " + e.getMessage());
-            return "Error";
+            return null;
         }
     }
 
     private static void loginSeed(String seedPhrase) {
+        if (!MnemonicService.validateMnemonic(seedPhrase)) {
+            System.out.println("Invalid seed phrase format!");
+            return;
+        }
         try (Connection conn = DatabaseManager.connect();
-                PreparedStatement pstmt = conn.prepareStatement("SELECT * FROM wallets")) {
-            pstmt.setString(3, seedPhrase);
+                PreparedStatement pstmt = conn.prepareStatement("SELECT * FROM wallets WHERE seed_phrase = ?")) {
+            pstmt.setString(1, seedPhrase);
             ResultSet rs = pstmt.executeQuery();
             if (rs.next()) {
-                String storedSeed = rs.getString("seed_phrase");
-                if (MnemonicService.validateMnemonic(storedSeed)) {
-                    System.out.println("Account successfully recovered!");
-                } else {
-                    System.out.println("Entered invalid Seed Phrase");
-                }
+                System.out.println("Account successfully recovered!");
+            } else {
+                System.out.println("Seed Phrase is not linked to any wallet");
             }
         } catch (SQLException exc) {
             System.out.println("Error detected: " + exc.getMessage());
@@ -121,14 +123,19 @@ public class MainApp {
 
     private static void userWallet(String user_account) {
         try (Connection conn = DatabaseManager.connect();
-                PreparedStatement pstmt = conn.prepareStatement("SELECT balance FROM wallets WHERE user_id = ?")) {
+                PreparedStatement pstmt = conn.prepareStatement("SELECT currency, balance FROM wallets WHERE user_id = ?")) {
             pstmt.setString(1, user_account);
             ResultSet rs = pstmt.executeQuery();
-            if (user_account.contains(user_account)) {
-                if (rs.next()) {
-                    String user_balance = rs.getString("balance");
-                    System.out.println("Your Bitcoin balance: " + user_balance);
-                }
+            System.out.println("\n----- Wallet Balances -----");
+            boolean foundWallet = false;
+            if (rs.next()) {
+                foundWallet = true;
+                String currency = rs.getString("currency");
+                double balance = rs.getDouble("balance");
+                System.out.println(currency + ":" + balance);
+            }
+            if (!foundWallet) {
+                System.out.println("No wallets found");
             }
         } catch (SQLException e) {
             System.out.println("Error: " + e.getMessage());
@@ -174,10 +181,16 @@ public class MainApp {
             if (loginChoice == 1) {
                 System.out.print("Email: ");
                 String email = scanner.nextLine();
-                userWallet(loginCred(email));
+                Integer userId = loginCred(email);
+                if (userId != null) {
+                    userWallet(String.valueOf(userId));
+                } else {
+                    System.out.println("Login failed!");
+                }
             } else {
                 System.out.print("Seed Phrase: ");
                 String seedPhrase = scanner.nextLine();
+                seedPhrase = seedPhrase.trim().toLowerCase();
                 loginSeed(seedPhrase);
             }
         }

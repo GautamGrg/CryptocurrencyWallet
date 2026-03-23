@@ -40,16 +40,4 @@ public class BitcoinWallet implements Wallet {
     public double getBalance() {
         return balance;
     }
-
-    public void credit(double amount) {
-        balance += amount;
-    }
-
-    public boolean debit(double amount) {
-        if (balance >= amount) {
-            balance -= amount;
-            return true;
-        }
-        return false;
-    }
 }

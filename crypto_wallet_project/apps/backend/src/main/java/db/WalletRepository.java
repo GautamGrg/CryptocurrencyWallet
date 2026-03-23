@@ -6,7 +6,7 @@ import wallet.Wallet;
 public class WalletRepository {
     public static void saveWallet(int userId, Wallet wallet) {
         String sql = """
-                    INSERT INTO wallets (user_id, seed_phrase, currency, address,  balance)
+                    INSERT INTO wallets (user_id, seed_phrase, currency, address, balance)
                     VALUES (?,?,?,?,?)
                 """;
         try (Connection con = DatabaseManager.connect();
