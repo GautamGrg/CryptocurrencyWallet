@@ -5,3 +5,4 @@ wallet\WalletManager.class
 wallet\Wallet.class
 db\WalletRepository.class
 wallet\EthereumWallet.class
+wallet\MnemonicService.class

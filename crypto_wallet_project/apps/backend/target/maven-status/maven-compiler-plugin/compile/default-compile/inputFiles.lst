@@ -1,7 +1,8 @@
-c:\Users\ggurung\Desktop\crypto_wallet_project\apps\backend\src\main\java\db\DatabaseManager.java
-c:\Users\ggurung\Desktop\crypto_wallet_project\apps\backend\src\main\java\db\WalletRepository.java
-c:\Users\ggurung\Desktop\crypto_wallet_project\apps\backend\src\main\java\MainApp.java
-c:\Users\ggurung\Desktop\crypto_wallet_project\apps\backend\src\main\java\wallet\BitcoinWallet.java
-c:\Users\ggurung\Desktop\crypto_wallet_project\apps\backend\src\main\java\wallet\EthereumWallet.java
-c:\Users\ggurung\Desktop\crypto_wallet_project\apps\backend\src\main\java\wallet\Wallet.java
-c:\Users\ggurung\Desktop\crypto_wallet_project\apps\backend\src\main\java\wallet\WalletManager.java
+c:\Users\ggurung\Desktop\GitHub\CryptocurrencyWallet\crypto_wallet_project\apps\backend\src\main\java\db\DatabaseManager.java
+c:\Users\ggurung\Desktop\GitHub\CryptocurrencyWallet\crypto_wallet_project\apps\backend\src\main\java\db\WalletRepository.java
+c:\Users\ggurung\Desktop\GitHub\CryptocurrencyWallet\crypto_wallet_project\apps\backend\src\main\java\MainApp.java
+c:\Users\ggurung\Desktop\GitHub\CryptocurrencyWallet\crypto_wallet_project\apps\backend\src\main\java\wallet\BitcoinWallet.java
+c:\Users\ggurung\Desktop\GitHub\CryptocurrencyWallet\crypto_wallet_project\apps\backend\src\main\java\wallet\EthereumWallet.java
+c:\Users\ggurung\Desktop\GitHub\CryptocurrencyWallet\crypto_wallet_project\apps\backend\src\main\java\wallet\MnemonicService.java
+c:\Users\ggurung\Desktop\GitHub\CryptocurrencyWallet\crypto_wallet_project\apps\backend\src\main\java\wallet\Wallet.java
+c:\Users\ggurung\Desktop\GitHub\CryptocurrencyWallet\crypto_wallet_project\apps\backend\src\main\java\wallet\WalletManager.java
