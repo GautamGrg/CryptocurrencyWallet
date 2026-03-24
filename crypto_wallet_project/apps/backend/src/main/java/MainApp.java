@@ -52,11 +52,10 @@ public class MainApp {
                 System.out.println("Invalid user, either you entered wrong email or the user is not registered");
                 return null;
             }
-            char[] password = cnsl.readPassword("Password: ");
-            String storedHash = rs.getString("password_hash");
             int userId = rs.getInt("id");
-
             for (int attempt = 1; attempt <= 3; attempt++) {
+                char[] password = cnsl.readPassword("Password: ");
+                String storedHash = rs.getString("password_hash");
                 if (validatePassword(new String(password), storedHash)) {
                     System.out.println("Login successful.");
                     return userId;
@@ -64,7 +63,7 @@ public class MainApp {
                     System.out.println("Invalid credentials. Attempt[" + attempt + "/3]");
                 }
             }
-            System.out.println("Exceeded number of password attempts. Login failed");
+            System.out.println("Exceeded number of password attempts...");
             return null;
         } catch (SQLException e) {
             System.out.println("Error: " + e.getMessage());
@@ -121,10 +120,11 @@ public class MainApp {
         }
     }
 
-    private static void userWallet(String user_account) {
+    private static void userWallet(String userId) {
         try (Connection conn = DatabaseManager.connect();
-                PreparedStatement pstmt = conn.prepareStatement("SELECT currency, balance FROM wallets WHERE user_id = ?")) {
-            pstmt.setString(1, user_account);
+                PreparedStatement pstmt = conn
+                        .prepareStatement("SELECT currency, balance FROM wallets WHERE user_id = ?")) {
+            pstmt.setString(1, userId);
             ResultSet rs = pstmt.executeQuery();
             System.out.println("\n----- Wallet Balances -----");
             boolean foundWallet = false;
@@ -163,7 +163,7 @@ public class MainApp {
             System.out.println("""
                     \n====================================
                             Registering New user
-                    ======================================
+                    ====================================
                     """);
             System.out.print("Email: ");
             String email = scanner.nextLine();
@@ -173,7 +173,7 @@ public class MainApp {
             System.out.println("""
                     \n======================================
                                 User Login
-                    ========================================
+                    ======================================
                     """);
             System.out.println("1. Login using user credentials\n2. Recover account using Seed Phrase");
             System.out.print("Enter your choice: ");
