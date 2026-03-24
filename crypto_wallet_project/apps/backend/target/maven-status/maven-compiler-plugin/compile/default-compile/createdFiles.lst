@@ -1,0 +1,7 @@
+db\DatabaseManager.class
+wallet\BitcoinWallet.class
+MainApp.class
+wallet\WalletManager.class
+wallet\Wallet.class
+db\WalletRepository.class
+wallet\EthereumWallet.class
