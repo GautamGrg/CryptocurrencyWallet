@@ -34,6 +34,7 @@ public class DatabaseManager {
                     address TEXT NOT NULL,
                     balance REAL DEFAULT 0,
                     FOREIGN KEY(user_id) REFERENCES users(id))
+                    PRAGMA foreign_keys = ON;
             """);
             System.out.println("Database created successfully!");
         } catch (Exception exc) {

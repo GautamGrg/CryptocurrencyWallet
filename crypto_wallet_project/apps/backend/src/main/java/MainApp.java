@@ -17,25 +17,37 @@ public class MainApp {
         String hashed = hashPassword(new String(password));
         String seedPhrase = MnemonicService.generateMnemonic();
         try (Connection conn = DatabaseManager.connect();
-                PreparedStatement pstmt = conn.prepareStatement(
-                        "INSERT INTO users(email, password_hash) VALUES (?, ?)",
-                        Statement.RETURN_GENERATED_KEYS)) {
+                PreparedStatement pstmt = conn.prepareStatement("SELECT * FROM users WHERE email = ?")) {
             pstmt.setString(1, email);
-            pstmt.setString(2, hashed);
-            pstmt.executeUpdate();
+            ResultSet rs = pstmt.executeQuery();
+            if (!rs.next()) {
+                try (Connection conn_ = DatabaseManager.connect();
+                        PreparedStatement pstmt_ = conn.prepareStatement(
+                                "INSERT INTO users(email, password_hash) VALUES (?, ?)",
+                                Statement.RETURN_GENERATED_KEYS)) {
+                    pstmt_.setString(1, email);
+                    pstmt_.setString(2, hashed);
+                    pstmt_.executeUpdate();
 
-            ResultSet rs = pstmt.getGeneratedKeys();
-            if (rs.next()) {
-                int userId = rs.getInt(1);
-                Wallet btcWallet = new BitcoinWallet();
-                WalletRepository.saveWallet(userId, btcWallet);
+                    ResultSet rs_ = pstmt_.getGeneratedKeys();
+                    if (rs_.next()) {
+                        int userId = rs_.getInt(1);
+                        Wallet btcWallet = new BitcoinWallet();
+                        WalletRepository.saveWallet(userId, btcWallet);
 
-                System.out.println("Registration successful!");
-                System.out.println("Seed phrase for account recovery: " + seedPhrase);
+                        System.out.println("Registration successful!");
+                        System.out.println("Seed phrase for account recovery: " + seedPhrase);
+                    }
+                } catch (SQLException e) {
+                    System.out.println("Error: " + e.getMessage());
+                }
+            }else{
+                System.out.println("Email is already registered!");
             }
         } catch (SQLException e) {
             System.out.println("Error: " + e.getMessage());
         }
+
     }
 
     private static Integer loginCred(String email) {
@@ -71,22 +83,24 @@ public class MainApp {
         }
     }
 
-    private static void loginSeed(String seedPhrase) {
+    private static Integer loginSeed(String seedPhrase) {
         if (!MnemonicService.validateMnemonic(seedPhrase)) {
-            System.out.println("Invalid seed phrase format!");
-            return;
+            System.out.println("Seed Phrase is not linked to any wallet");
+            return null;
         }
         try (Connection conn = DatabaseManager.connect();
-                PreparedStatement pstmt = conn.prepareStatement("SELECT * FROM wallets WHERE seed_phrase = ?")) {
+                PreparedStatement pstmt = conn.prepareStatement("SELECT user_id FROM wallets WHERE seed_phrase = ?")) {
             pstmt.setString(1, seedPhrase);
             ResultSet rs = pstmt.executeQuery();
+            int userId = rs.getInt("user_id");
             if (rs.next()) {
                 System.out.println("Account successfully recovered!");
-            } else {
-                System.out.println("Seed Phrase is not linked to any wallet");
+                return userId;
             }
+            return null;
         } catch (SQLException exc) {
             System.out.println("Error detected: " + exc.getMessage());
+            return null;
         }
     }
 
@@ -166,7 +180,7 @@ public class MainApp {
                     ====================================
                     """);
             System.out.print("Email: ");
-            String email = scanner.nextLine();
+            String email = scanner.nextLine().toLowerCase();
             char[] password = cnsl.readPassword("Password: ");
             register(email, password);
         } else {
@@ -189,9 +203,13 @@ public class MainApp {
                 }
             } else {
                 System.out.print("Seed Phrase: ");
-                String seedPhrase = scanner.nextLine();
-                seedPhrase = seedPhrase.trim().toLowerCase();
-                loginSeed(seedPhrase);
+                String seedPhrase = scanner.nextLine().trim().toLowerCase();
+                Integer seedUserID = loginSeed(seedPhrase);
+                if (seedUserID != null) {
+                    userWallet(String.valueOf(seedUserID));
+                } else {
+                    System.out.println("Failed to recover account!");
+                }
             }
         }
         scanner.close();
