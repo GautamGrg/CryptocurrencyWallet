@@ -1,5 +1,7 @@
 import java.io.*;
 import java.sql.*;
+import java.sql.Date;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.security.SecureRandom;
 import java.security.MessageDigest;
@@ -15,7 +17,9 @@ import wallet.MnemonicService;
 public class MainApp {
     private static void register(String email, char[] password) {
         String hashed = hashPassword(new String(password));
-        String seedPhrase = MnemonicService.generateMnemonic();
+        Timestamp timestamp = new Timestamp(System.currentTimeMillis());
+        Date date = new Date(timestamp.getTime());
+        SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy' 'HH:mm:ss");
         try (Connection conn = DatabaseManager.connect();
                 PreparedStatement pstmt = conn.prepareStatement("SELECT * FROM users WHERE email = ?")) {
             pstmt.setString(1, email);
@@ -23,17 +27,19 @@ public class MainApp {
             if (!rs.next()) {
                 try (Connection conn_ = DatabaseManager.connect();
                         PreparedStatement pstmt_ = conn.prepareStatement(
-                                "INSERT INTO users(email, password_hash) VALUES (?, ?)",
+                                "INSERT INTO users(email, password_hash, created_date) VALUES (?, ?, ?)",
                                 Statement.RETURN_GENERATED_KEYS)) {
                     pstmt_.setString(1, email);
                     pstmt_.setString(2, hashed);
+                    pstmt_.setString(3, sdf.format(date));
                     pstmt_.executeUpdate();
 
                     ResultSet rs_ = pstmt_.getGeneratedKeys();
                     if (rs_.next()) {
                         int userId = rs_.getInt(1);
                         Wallet btcWallet = new BitcoinWallet();
-                        WalletRepository.saveWallet(userId, btcWallet);
+                        String seedPhrase = btcWallet.getSeedPhrase();
+                        WalletRepository.saveWallet(userId, btcWallet, seedPhrase);
 
                         System.out.println("Registration successful!");
                         System.out.println("Seed phrase for account recovery: " + seedPhrase);
@@ -41,7 +47,7 @@ public class MainApp {
                 } catch (SQLException e) {
                     System.out.println("Error: " + e.getMessage());
                 }
-            }else{
+            } else {
                 System.out.println("Email is already registered!");
             }
         } catch (SQLException e) {
@@ -191,9 +197,9 @@ public class MainApp {
                     """);
             System.out.println("1. Login using user credentials\n2. Recover account using Seed Phrase");
             System.out.print("Enter your choice: ");
-            int loginChoice = Integer.valueOf(scanner.nextLine());
+            int loginChoice = Integer.parseInt(scanner.nextLine());
             if (loginChoice == 1) {
-                System.out.print("Email: ");
+                System.out.print("\nEmail: ");
                 String email = scanner.nextLine();
                 Integer userId = loginCred(email);
                 if (userId != null) {

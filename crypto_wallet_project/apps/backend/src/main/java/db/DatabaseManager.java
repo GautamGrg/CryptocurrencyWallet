@@ -22,6 +22,7 @@ public class DatabaseManager {
             stm.execute("""
                 CREATE TABLE IF NOT EXISTS users(
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_date TEXT NOT NULL,
                     email TEXT NOT NULL UNIQUE,
                     password_hash TEXT NOT NULL)
             """);
@@ -34,7 +35,6 @@ public class DatabaseManager {
                     address TEXT NOT NULL,
                     balance REAL DEFAULT 0,
                     FOREIGN KEY(user_id) REFERENCES users(id))
-                    PRAGMA foreign_keys = ON;
             """);
             System.out.println("Database created successfully!");
         } catch (Exception exc) {
