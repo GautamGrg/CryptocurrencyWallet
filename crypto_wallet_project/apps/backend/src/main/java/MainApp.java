@@ -37,7 +37,7 @@ public class MainApp {
                     ResultSet rs_ = pstmt_.getGeneratedKeys();
                     if (rs_.next()) {
                         int userId = rs_.getInt(1);
-                        Wallet btcWallet = new BitcoinWallet();
+                        Wallet btcWallet = new BitcoinWallet(hashed);
                         String seedPhrase = btcWallet.getSeedPhrase();
                         WalletRepository.saveWallet(userId, btcWallet, seedPhrase);
 
