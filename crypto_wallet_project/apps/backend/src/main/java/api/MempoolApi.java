@@ -51,13 +51,15 @@ public class MempoolApi {
 
     // This POST request will broadcast a raw transaction to the testnet network.
     // This will return txid in String
-    public static String postTrans(Hex transactionId) throws IOException, InterruptedException {
+    public static String broadcastTransaction(String txHex) throws IOException, InterruptedException {
         HttpRequest postTrans =
                 HttpRequest.newBuilder()
-                        .uri(URI.create("" + "https://mempool.space/testnet/api/tx"))
+                        .uri(URI.create("https://mempool.space/testnet/api/tx"))
+                        .POST(HttpRequest.BodyPublishers.ofString(txHex))
                         .build();
         HttpResponse<String> getResponse = client.send(postTrans, BodyHandlers.ofString());
-
+        int code = getResponse.statusCode();
+        System.out.println("Transaction broadcast status code: " + code);
         return getResponse.body();
     }
 
