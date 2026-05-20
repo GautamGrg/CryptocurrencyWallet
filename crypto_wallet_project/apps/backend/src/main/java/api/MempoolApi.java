@@ -7,13 +7,16 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpResponse.BodyHandlers;
-import org.bouncycastle.util.encoders.Hex;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class MempoolApi {
     public static HttpClient client = HttpClient.newHttpClient();
     public static ObjectMapper objectMapper = new ObjectMapper();
+    private static final Logger logger = LogManager.getLogger(MempoolApi.class);
+    
 
     // We first send a GET request to verify if address is valid
     public static Boolean getIsValid(String address) throws IOException, InterruptedException {
@@ -57,11 +60,19 @@ public class MempoolApi {
                         .uri(URI.create("https://mempool.space/testnet/api/tx"))
                         .POST(HttpRequest.BodyPublishers.ofString(txHex))
                         .build();
+        try {
         HttpResponse<String> getResponse = client.send(postTrans, BodyHandlers.ofString());
         int code = getResponse.statusCode();
+        if (getResponse.statusCode() != 200){
+                throw new IOException("Failed to fetch response from POST request to transaction endpoint: " + getResponse.body());
+        }
         System.out.println("Transaction broadcast status code: " + code);
         return getResponse.body();
+    } catch (Exception exc){
+        logger.error("Error sending POST request to API endpoint");
+        return "";
     }
+}
 
     public static double getRecommFees()
             throws IOException, InterruptedException { // Returns value in sat/vb

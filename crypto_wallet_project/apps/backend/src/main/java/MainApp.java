@@ -17,7 +17,6 @@ import org.apache.logging.log4j.Logger;
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.ECKey;
-import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Sha256Hash;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.core.TransactionInput;
@@ -224,7 +223,7 @@ public class MainApp {
                 foundWallet = true;
                 String currency = rs.getString("currency");
                 double balance = rs.getDouble("balance");
-                logger.info(currency + ":" + balance);
+                logger.info(currency + ":" + String.format("%.8f", balance));
             }
             if (!foundWallet) {
                 logger.error("No wallets found");
@@ -256,55 +255,61 @@ public class MainApp {
         }
     }
 
-    private static boolean transactionSend(double amount, String senderAddress, String recpientAddress)
+    // class for signing transaction
+    public static class SignTransaction {
+        public SignTransaction(String senderAddress, Transaction tx) throws InvalidProtocolBufferException, IOException, InterruptedException {
+            try (Connection conn = DatabaseManager.connect();
+                    PreparedStatement pstmt = conn.prepareStatement(
+                            "SELECT scrypt_param_bytes, public_key_bytes,"
+                            + " encrypted_private_key_bytes, encrypted_private_key_ivector,"
+                            + " user_id FROM wallets WHERE address = ?")) {
+                pstmt.setString(1, senderAddress);
+                ResultSet rs = pstmt.executeQuery();
+                if (!rs.next()) {
+                    throw new RuntimeException("An error occurred retrieving user details");
+                }
+                int userId = rs.getInt("user_id");
+                byte[] kcsParamBytes = rs.getBytes("scrypt_param_bytes");
+                byte[] pubKeyBytes = rs.getBytes("public_key_bytes");
+                byte[] encryptedPrivBytes = rs.getBytes("encrypted_private_key_bytes");
+                byte[] encryptedPrivKeyIvector = rs.getBytes("encrypted_private_key_ivector");
+
+                try (PreparedStatement pstmtUser = conn.prepareStatement(
+                        "SELECT password_hash FROM users WHERE id = ?")) {
+                    pstmtUser.setInt(1, userId);
+                    ResultSet rsUser = pstmtUser.executeQuery();
+                    if (!rsUser.next()) {
+                        throw new RuntimeException("User does not have a registered wallet");
+                    }
+                    String userPasswordHash = rsUser.getString("password_hash");
+
+                    ScryptParameters kcsParameters = ScryptParameters.parseFrom(kcsParamBytes);
+                    KeyCrypterScrypt crypt = new KeyCrypterScrypt(kcsParameters);
+                    KeyParameter aesKey = crypt.deriveKey(userPasswordHash);
+                    EncryptedData encryptedData = new EncryptedData(encryptedPrivKeyIvector, encryptedPrivBytes);
+                    ECKey decryptPrivKey = ECKey.fromEncrypted(encryptedData, crypt, pubKeyBytes).decrypt(crypt, aesKey);
+                    sign(tx, senderAddress, decryptPrivKey);
+                }
+            } catch (SQLException exc) {
+                throw new RuntimeException("Database error during key decryption: " + exc.getMessage(), exc);
+            }
+        }
+
+        private void sign(Transaction tx, String senderAddress, ECKey key) {
+            Script scriptPubKey = ScriptBuilder.createOutputScript(
+                    Address.fromString(TestNet3Params.get(), senderAddress));
+            for (int i = 0; i < tx.getInputs().size(); i++) {
+                TransactionSignature sig = tx.calculateSignature(
+                        i, key, scriptPubKey, Transaction.SigHash.ALL, false);
+                tx.getInput(i).setScriptSig(ScriptBuilder.createInputScript(sig, key));
+            }
+        }
+    }
+
+    // Method to broadcast transaction
+    private static Boolean transactionSend(double amount, String senderAddress, String recpientAddress)
             throws InvalidProtocolBufferException, IOException, InterruptedException, SQLException {
-        try (Connection conn = DatabaseManager.connect();
-                PreparedStatement pstmt =
-                        conn.prepareStatement(
-                                "SELECT scrypt_param_bytes, public_key_bytes,"
-                                    + " encrypted_private_key_bytes, encrypted_private_key_ivector,"
-                                    + " user_id FROM wallets WHERE address = ?")) {
-            pstmt.setString(1, senderAddress);
-            ResultSet rs = pstmt.executeQuery();
-            if (!rs.next()) {
-                throw new java.lang.Error("An Error occured retrieving user details");
-            }
-            int userId = rs.getInt("user_id");
-            byte[] kcsParamBytes = rs.getBytes("scrypt_param_bytes");
-            byte[] pubKeyBytes = rs.getBytes("public_key_bytes");
-            byte[] encryptedPrivBytes = rs.getBytes("encrypted_private_key_bytes");
-            byte[] encryptedPrivKeyIvector = rs.getBytes("encrypted_private_key_ivector");
-
-            try(PreparedStatement pstmtUser =
-                    conn.prepareStatement("SELECT password_hash FROM users WHERE id = ?")){
-            pstmtUser.setInt(1, userId);
-            ResultSet rsUser = pstmtUser.executeQuery();
-            if (!rsUser.next()) {
-                logger.error("User does not have a registered wallet");
-            }
-            String userPasswordHash = rsUser.getString("password_hash");
-
-            // We inherit the KeyCrypterScrypt parameters used previously to derive the AESKey
-            // for encryption. So that it retains the same salt for the decryption process.
-            ScryptParameters kcsParameters = ScryptParameters.parseFrom(kcsParamBytes);
-            KeyCrypterScrypt crypt = new KeyCrypterScrypt(kcsParameters);
-            // Derieve the AESkey for decrypting the private key
-            KeyParameter aesKey = crypt.deriveKey(userPasswordHash);
-            // Holder for encrypted values for private key bytes and private key I-vector
-            // preparations for decrypting the private key
-            EncryptedData encryptedData =
-                    new EncryptedData(encryptedPrivKeyIvector,encryptedPrivBytes);
-
-            // The fromEncrypted method constructs a key using the private key
-            // components (private key bytes and initialisation vector). The returned
-            // ECKey will be used for digital signing after decryption
-            ECKey encryptedPrivKey = ECKey.fromEncrypted(encryptedData, crypt, pubKeyBytes);
-            // Decrypt the private key using the KeyCrypter and AESkey dervied from
-            // the hashed password
-            ECKey decryptedPrivKey = encryptedPrivKey.decrypt(crypt, aesKey);
-
-            NetworkParameters netParam = TestNet3Params.get();
-            Transaction tx = new Transaction(netParam);
+            Transaction tx = new Transaction(TestNet3Params.get());
 
             // Check if the recipient address is a valid P2PKH address
             boolean addressIsValid = MempoolApi.getIsValid(recpientAddress);
@@ -317,81 +322,56 @@ public class MainApp {
                 int input = 0;
                 int output = 2;
 
-                Address senderAddressBytes = Address.fromString(netParam, senderAddress);
-                Address recipeintAddressBytes = Address.fromString(netParam, recpientAddress);
+                Address senderAddressBytes = Address.fromString(TestNet3Params.get(), senderAddress);
+                Address recipeintAddressBytes = Address.fromString(TestNet3Params.get(), recpientAddress);
                 tx.addOutput(coin, recipeintAddressBytes);
 
                 // We calculate the intial / estimated fee using tx size * fastestFeeRate in
                 // sat/VByte
-                long feeSatoshi =
-                        ((long) (MempoolApi.getRecommFees())
-                                * (10 + (input * 148) + (output * 34)));
+                final double fastestFees = MempoolApi.getRecommFees();
+                long feeSatoshi = ((long) fastestFees * (10 + (input * 148) + (output * 34)));
                 long amountPlusFee = feeSatoshi + amountInSatoshi;
 
                 long userSatoshi = 0;
-                final double fastestFees = MempoolApi.getRecommFees();
                 JsonNode utxoNode = objectMapper.readTree(MempoolApi.getUtxo(senderAddress));
                 if (utxoNode.isArray()) {
                     for (JsonNode utxo : utxoNode) {
-                        if (userSatoshi <= amountPlusFee) {
+                        if (userSatoshi < amountPlusFee) {
                             userSatoshi += utxo.get("value").asLong();
                             input++;
-                            // Re-calculate estimated transaction fees and total amount required to
-                            // sign transaction
-                            feeSatoshi =
-                                    ((long) (fastestFees)
-                                            * (10 + (input * 148) + (output * 34)));
+                            feeSatoshi = ((long) fastestFees * (10 + (input * 148) + (output * 34)));
                             amountPlusFee = feeSatoshi + amountInSatoshi;
-                            // Retrieve the previous transaction ID and vout value (transaction
-                            // index)
                             long prevVout = utxo.get("vout").asLong();
                             String prevTxid = utxo.get("txid").asString();
                             Sha256Hash prevTxidHash = Sha256Hash.wrap(Hex.decode(prevTxid));
-                            // The transaction outpoint is used to reference a previous transaction
                             TransactionOutPoint txOutPoint =
-                                    new TransactionOutPoint(netParam, prevVout, prevTxidHash);
-                            tx.addInput(
-                                    new TransactionInput(
-                                            netParam,
-                                            tx,
-                                            new byte[] {},
-                                            txOutPoint,
-                                            Coin.valueOf(utxo.get("value").asLong())));
+                                    new TransactionOutPoint(TestNet3Params.get(), prevVout, prevTxidHash);
+                            tx.addInput(new TransactionInput(
+                                    TestNet3Params.get(), tx, new byte[]{},
+                                    txOutPoint, Coin.valueOf(utxo.get("value").asLong())));
                         } else {
                             break;
                         }
-                    }   
+                    }
                     if (userSatoshi < amountPlusFee) {
                         logger.error("Insufficient funds to send!");
                         return false;
                     }
                 }
-                // If the change output is less than dust threshold (P2PKH is ~ 546 sat/vB)
                 long satoshiChange = userSatoshi - amountInSatoshi - feeSatoshi;
                 if (satoshiChange > 546) {
                     tx.addOutput(Coin.valueOf(satoshiChange), senderAddressBytes);
-                } 
-
-                // Signing each input in the transaction
-                Script scriptPubKey = ScriptBuilder.createOutputScript(Address.fromString(netParam, senderAddress));
-                for (int i = 0; i < tx.getInputs().size(); i ++){
-                    TransactionSignature sig = tx.calculateSignature(i, decryptedPrivKey, scriptPubKey, Transaction.SigHash.ALL, false);
-                    tx.getInput(i).setScriptSig(ScriptBuilder.createInputScript(sig, decryptedPrivKey));
                 }
+
+                new SignTransaction(senderAddress, tx);
                 String txHex = Hex.toHexString(tx.bitcoinSerialize());
                 String txId = MempoolApi.broadcastTransaction(txHex);
                 if (txId.length() != 0){
                     logger.info("Transaction broadcast successful. TXID response: " + txId);
                     return true;
-                }return false;
-            }
-        } catch (SQLException exc) {
-            logger.error("Error caused by: " + exc);
-            return false;
-            }
+                }
+            }return false;
         }
-        return true; 
-    }
 
     public static void main(String[] args) throws IOException, InterruptedException {
         DatabaseManager.init();
@@ -458,11 +438,12 @@ public class MainApp {
                         System.out.print("\nEnter the recipient's public address: ");
                         String recpientAddress = scanner.nextLine();
                         System.out.print("\nEnter the amount of BTC to send: ");
-                        double amount = scanner.nextDouble();
+                        double amount = Double.parseDouble(scanner.nextLine());
 
                         try {
                             if(transactionSend(amount, userAddress, recpientAddress)){
                                 logger.info("Successfully sent BTC: " + amount + " to recipient address: " + recpientAddress);
+                                refreshBalance(userAddress);
                             }
                         } catch (InvalidProtocolBufferException | SQLException exc) {
                             logger.error("The following error was raised due to: " + exc);
